@@ -5,12 +5,12 @@ After=network.target
 [Service]
 Type=simple
 User=YOUR_USERNAME
-WorkingDirectory=/home/YOUR_USERNAME/Downloads/energy_graphics
-ExecStart=/home/YOUR_USERNAME/Downloads/energy_graphics/venv/bin/python main.py
+WorkingDirectory=/home/YOUR_USERNAME/Downloads/LvivPowerOffSchedulesBot
+ExecStart=/home/YOUR_USERNAME/Downloads/LvivPowerOffSchedulesBot/venv/bin/python main.py
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=/home/YOUR_USERNAME/Downloads/energy_graphics/.env
+EnvironmentFile=/home/YOUR_USERNAME/Downloads/LvivPowerOffSchedulesBot/.env
 
 [Install]
 WantedBy=multi-user.target
