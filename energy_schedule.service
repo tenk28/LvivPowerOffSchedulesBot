@@ -1,0 +1,16 @@
+[Unit]
+Description=Energy Schedule Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/Downloads/energy_graphics
+ExecStart=/home/YOUR_USERNAME/Downloads/energy_graphics/venv/bin/python main.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/YOUR_USERNAME/Downloads/energy_graphics/.env
+
+[Install]
+WantedBy=multi-user.target
