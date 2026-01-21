@@ -8,6 +8,7 @@ import asyncio
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
 from telegram.ext import ApplicationBuilder
+from typing import NamedTuple
 
 load_dotenv()  # loads .env from current folder
 
@@ -15,19 +16,46 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHAT_ID = int(os.getenv('CHAT_ID'))
 CHECK_DELAY_SECS = int(os.getenv('CHECK_DELAY_SECS')) # seconds
 URL = "https://poweron.loe.lviv.ua/"
-IMAGE_FILEPATH = "image.jpg"
+DATA_FILEPATH = "data.txt"
 
-async def get_picture_url() -> str | None:
+class PowerOffData(NamedTuple):
+    power_off_str: str
+    picture_url: str
+
+async def get_poweroff_data() -> PowerOffData | None:
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.goto(URL, wait_until="networkidle")
 
-        img = page.locator("(//img[starts-with(@src,'http')])[1]")
-        src = await img.get_attribute("src")
+        # --- TEXT ---
+        text_locator = page.locator(
+            '//*[@id="root"]/div/div/div[1]/div[2]/div[1]/div/p[7]'
+        )
+
+        if await text_locator.count() == 0:
+            await browser.close()
+            return None
+
+        poweroff_text = (await text_locator.text_content()).strip()
+
+        # --- IMAGE ---
+        img_locator = page.locator(
+            "(//img[starts-with(@src,'http') and not(contains(@src,'svg'))])[1]"
+        )
+
+        if await img_locator.count() == 0:
+            await browser.close()
+            return None
+
+        image_url = await img_locator.get_attribute("src")
 
         await browser.close()
-        return src
+
+        return PowerOffData(
+            poweroff_text,
+            image_url,
+        )
 
 def download_picture_to_memory(pic_url: str) -> bytes:
     headers = {
@@ -40,34 +68,29 @@ def download_picture_to_memory(pic_url: str) -> bytes:
 
     return response.content
 
-def sha256_file(path: str | bytes, chunk_size=8192):
-    if type(path) is str:
-        h = hashlib.sha256()
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(chunk_size), b""):
-                h.update(chunk)
-        return h.hexdigest()
-    else:
-        return hashlib.sha256(path).hexdigest()
-
 async def polling(app):
     while(True):
         print('New verification iteration')
-        pic_url = await get_picture_url()
-        if pic_url:
-            new_pic_bytes = download_picture_to_memory(pic_url)
-            sha256_old_pic = 0
-            if os.path.isfile(IMAGE_FILEPATH):
-                sha256_old_pic = sha256_file(IMAGE_FILEPATH)
-            sha256_new_pic = sha256_file(new_pic_bytes)
-            if sha256_old_pic != sha256_new_pic:
-                print("New picture detected, downloading new one")
-                with open(IMAGE_FILEPATH, "wb") as f:
-                    f.write(new_pic_bytes)
-                    print('Picture updated')
-                await app.bot.send_photo(chat_id=CHAT_ID, photo=new_pic_bytes,caption="Група 3.1", disable_notification=True)
+        power_off_data = await get_poweroff_data()
+        if power_off_data:
+            prev_data_str: str = ""
+            
+            if os.path.isfile(DATA_FILEPATH):
+                with open(DATA_FILEPATH, "r") as f:
+                    prev_data_str = f.read()
+
+            new_power_off_str = power_off_data.power_off_str
+            if prev_data_str != new_power_off_str:
+                print("New schedule detected, updating")
+                
+                with open(DATA_FILEPATH, "w") as f:
+                    f.write(new_power_off_str)
+
+                new_pic_bytes = download_picture_to_memory(power_off_data.picture_url)
+                await app.bot.send_photo(chat_id=CHAT_ID, photo=new_pic_bytes, caption=new_power_off_str, disable_notification=True)
             else:
-                print("Picture haven't update")
+                print("Schedule hasn't updated")
+
         time.sleep(CHECK_DELAY_SECS)
 
 async def main():
